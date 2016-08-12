@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.admin.utils import flatten_fieldsets
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 
@@ -15,8 +16,36 @@ from .models import (  # @@@ make all these read-only
 )
 
 
+User = get_user_model()
+
+
+class ReadOnlyAdmin(admin.ModelAdmin):
+
+    def get_actions(self, request):
+        actions = super(ReadOnlyAdmin, self).get_actions(request)
+        del actions['delete_selected']
+        return actions
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return self.readonly_fields
+
+        if self.declared_fieldsets:
+            return flatten_fieldsets(self.declared_fieldsets)
+        else:
+            return list(set(
+                [field.name for field in self.opts.local_fields] +
+                [field.name for field in self.opts.local_many_to_many]
+            ))
+
+
 def user_search_fields():  # coverage: omit
-    User = get_user_model()
     fields = [
         "user__{0}".format(User.USERNAME_FIELD)
     ]
@@ -101,9 +130,9 @@ class CustomerSubscriptionStatusListFilter(admin.SimpleListFilter):
         return queryset.all()
 
 
-admin.site.register(
-    Charge,
-    list_display=[
+@admin.register(Charge)
+class ChargeAdmin(ReadOnlyAdmin):
+    list_display = [
         "stripe_id",
         "customer",
         "amount",
@@ -113,64 +142,63 @@ admin.site.register(
         "refunded",
         "receipt_sent",
         "created_at"
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
         "customer__stripe_id",
         "invoice__stripe_id"
-    ] + customer_search_fields(),
-    list_filter=[
+    ] + customer_search_fields()
+    list_filter = [
         "paid",
         "disputed",
         "refunded",
         "created_at"
-    ],
-    raw_id_fields=[
+    ]
+    raw_id_fields = [
         "customer",
         "invoice"
-    ],
-)
+    ]
 
-admin.site.register(
-    EventProcessingException,
-    list_display=[
+
+@admin.register(EventProcessingException)
+class EventProcessingExceptionAdmin(ReadOnlyAdmin):
+    list_display = [
         "message",
         "event",
         "created_at"
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "message",
         "traceback",
         "data"
-    ],
-    raw_id_fields=[
+    ]
+    raw_id_fields = [
         "event"
-    ],
-)
+    ]
 
-admin.site.register(
-    Event,
-    raw_id_fields=["customer"],
-    list_display=[
+
+@admin.register(Event)
+class EventAdmin(ReadOnlyAdmin):
+    raw_id_fields = ["customer"]
+    list_display = [
         "stripe_id",
         "kind",
         "livemode",
         "valid",
         "processed",
         "created_at"
-    ],
-    list_filter=[
+    ]
+    list_filter = [
         "kind",
         "created_at",
         "valid",
         "processed"
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
         "customer__stripe_id",
         "validated_message"
-    ] + customer_search_fields(),
-)
+    ] + customer_search_fields()
 
 
 class SubscriptionInline(admin.TabularInline):
@@ -182,10 +210,10 @@ def subscription_status(obj):
 subscription_status.short_description = "Subscription Status"
 
 
-admin.site.register(
-    Customer,
-    raw_id_fields=["user"],
-    list_display=[
+@admin.register(Customer)
+class CustomerAdmin(ReadOnlyAdmin):
+    raw_id_fields = ["user"]
+    list_display = [
         "stripe_id",
         "user",
         "account_balance",
@@ -194,17 +222,16 @@ admin.site.register(
         "default_source",
         subscription_status,
         "date_purged"
-    ],
-    list_filter=[
+    ]
+    list_filter = [
         "delinquent",
         CustomerHasCardListFilter,
         CustomerSubscriptionStatusListFilter
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
     ] + user_search_fields(),
-    inlines=[SubscriptionInline]
-)
+    inlines = [SubscriptionInline]
 
 
 class InvoiceItemInline(admin.TabularInline):
@@ -217,7 +244,6 @@ customer_has_card.short_description = "Customer Has Card"
 
 
 def customer_user(obj):
-    User = get_user_model()
     username = getattr(obj.customer.user, User.USERNAME_FIELD)
     email = getattr(obj, "email", "")
     return "{0} <{1}>".format(
@@ -227,10 +253,10 @@ def customer_user(obj):
 customer_user.short_description = "Customer"
 
 
-admin.site.register(
-    Invoice,
-    raw_id_fields=["customer"],
-    list_display=[
+@admin.register(Invoice)
+class InvoiceAdmin(ReadOnlyAdmin):
+    raw_id_fields = ["customer"]
+    list_display = [
         "stripe_id",
         "paid",
         "closed",
@@ -240,12 +266,12 @@ admin.site.register(
         "period_end",
         "subtotal",
         "total"
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
         "customer__stripe_id",
-    ] + customer_search_fields(),
-    list_filter=[
+    ] + customer_search_fields()
+    list_filter = [
         InvoiceCustomerHasCardListFilter,
         "paid",
         "closed",
@@ -255,13 +281,13 @@ admin.site.register(
         "date",
         "period_end",
         "total"
-    ],
-    inlines=[InvoiceItemInline]
-)
+    ]
+    inlines = [InvoiceItemInline]
 
-admin.site.register(
-    Plan,
-    list_display=[
+
+@admin.register(Plan)
+class PlanAdmin(ReadOnlyAdmin):
+    list_display = [
         "stripe_id",
         "name",
         "amount",
@@ -269,15 +295,15 @@ admin.site.register(
         "interval",
         "interval_count",
         "trial_period_days",
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
         "name",
-    ],
-    list_filter=[
+    ]
+    list_filter = [
         "currency",
-    ],
-    readonly_fields=[
+    ]
+    readonly_fields = [
         "stripe_id",
         "name",
         "amount",
@@ -287,21 +313,20 @@ admin.site.register(
         "trial_period_days",
         "statement_descriptor",
         "created_at",
-    ],
-)
+    ]
 
-admin.site.register(
-    Transfer,
-    raw_id_fields=["event"],
-    list_display=[
+
+@admin.register(Transfer)
+class TransferAdmin(ReadOnlyAdmin):
+    raw_id_fields = ["event"]
+    list_display = [
         "stripe_id",
         "amount",
         "status",
         "date",
         "description"
-    ],
-    search_fields=[
+    ]
+    search_fields = [
         "stripe_id",
         "event__stripe_id"
     ]
-)
