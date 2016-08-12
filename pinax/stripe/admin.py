@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.contrib.admin.utils import flatten_fieldsets
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 
@@ -33,16 +32,25 @@ class ReadOnlyAdmin(admin.ModelAdmin):
         return False
 
     def get_readonly_fields(self, request, obj=None):
-        if request.user.is_superuser:
-            return self.readonly_fields
+        return list(set(
+            [field.name for field in self.opts.local_fields] +
+            [field.name for field in self.opts.local_many_to_many]
+        ))
 
-        if self.declared_fieldsets:
-            return flatten_fieldsets(self.declared_fieldsets)
-        else:
-            return list(set(
-                [field.name for field in self.opts.local_fields] +
-                [field.name for field in self.opts.local_many_to_many]
-            ))
+
+class ReadOnlyInline(admin.TabularInline):
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return list(set(
+            [field.name for field in self.opts.local_fields] +
+            [field.name for field in self.opts.local_many_to_many]
+        ))
 
 
 def user_search_fields():  # coverage: omit
@@ -201,7 +209,7 @@ class EventAdmin(ReadOnlyAdmin):
     ] + customer_search_fields()
 
 
-class SubscriptionInline(admin.TabularInline):
+class SubscriptionInline(ReadOnlyInline):
     model = Subscription
 
 
@@ -234,7 +242,7 @@ class CustomerAdmin(ReadOnlyAdmin):
     inlines = [SubscriptionInline]
 
 
-class InvoiceItemInline(admin.TabularInline):
+class InvoiceItemInline(ReadOnlyInline):
     model = InvoiceItem
 
 
@@ -302,17 +310,6 @@ class PlanAdmin(ReadOnlyAdmin):
     ]
     list_filter = [
         "currency",
-    ]
-    readonly_fields = [
-        "stripe_id",
-        "name",
-        "amount",
-        "currency",
-        "interval",
-        "interval_count",
-        "trial_period_days",
-        "statement_descriptor",
-        "created_at",
     ]
 
 
