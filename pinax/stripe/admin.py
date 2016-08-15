@@ -237,8 +237,8 @@ class CustomerAdmin(ReadOnlyAdmin):
         CustomerSubscriptionStatusListFilter
     ]
     search_fields = [
-        "stripe_id",
-    ] + user_search_fields(),
+        "stripe_id"
+    ] + user_search_fields()
     inlines = [SubscriptionInline]
 
 
